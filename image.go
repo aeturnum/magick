@@ -180,15 +180,26 @@ func DecodeData(data []byte) (*Image, error) {
 	return decodeData(data, 0)
 }
 
-// DecodeFile works like Decode, but accepts a
-// filename.
+// DecodeFile lets imagemagick read the file in directly
+// to support files that cannot be decoded by blobs.
 func DecodeFile(filename string) (*Image, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return Decode(f)
+
+	info := C.CloneImageInfo(nil)
+	defer C.DestroyImageInfo(info)
+	var ex C.ExceptionInfo
+	C.GetExceptionInfo(&ex)
+	defer C.DestroyExceptionInfo(&ex)
+	if len(filename) < 4096 { // length of info.filename
+		C.strcpy(&info.filename[0], C.CString(filename))
+	}
+
+	im := C.ReadImage(info, &ex)
+	return checkImage(im, nil, &ex, "decoding")
 }
 
 func decodeData(data []byte, try int) (*Image, error) {
